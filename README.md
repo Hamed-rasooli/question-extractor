@@ -1,109 +1,207 @@
-# PDF to Web Form: Automated Question Extractor and Uploader
+<div align="center">
 
-This project provides a complete, two-stage solution for automating the process of transferring multiple-choice quizzes from a PDF file into a web-based platform.
+# 📝 AI Question Extractor & Sanjeshkade Automator
+### سامانه استخراج هوشمند سوالات آزمون با هوش مصنوعی و بارگذاری خودکار در سنجشکده
 
-1.  **AI-Powered Extraction (`extractor.py`):** A Python script that leverages the **Gemini 1.5 Flash** multimodal AI to analyze images of PDF pages. It intelligently extracts all questions, options, and correct answers, saving them into a structured `JSON` file.
-2.  **Web Automation (`automator.py`):** A second Python script using **Selenium** that reads the generated `JSON` file. It then automatically logs into a target website (e.g., biazmoon.com), navigates to the question creation form, and systematically enters and submits each question.
+[![Python Version](https://img.shields.io/badge/Python-3.9%20%7C%203.10%20%7C%203.11%20%7C%203.12-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-1.35%2B-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![Google Gemini AI](https://img.shields.io/badge/Google%20Gemini-Flash%20%2F%202.5-8E75C2?style=for-the-badge&logo=google&logoColor=white)](https://ai.google.dev/)
+[![Selenium](https://img.shields.io/badge/Selenium-4.20%2B-43B02A?style=for-the-badge&logo=selenium&logoColor=white)](https://www.selenium.dev/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
 
----
+<br/>
 
-## ✨ Key Features
+[**فارسی (Persian)**](#-راهنمای-فارسی) &nbsp; | &nbsp; [**English**](#-english-guide)
 
-* **Accurate PDF to JSON Extraction**: Directly converts quiz questions from PDF files into a clean, structured `JSON` format.
-* **Powered by Gemini AI**: Utilizes the powerful `gemini-1.5-flash` model for high-accuracy visual content analysis.
-* **Flexible Answer Key Processing**: Can extract correct answers from either a dedicated answer key page or by detecting **bolded** text within the options.
-* **Advanced Text Post-Processing**: Automatically cleans the extracted text, correcting common punctuation and spacing errors (e.g., for Persian ZWNJ).
-* **End-to-End Web Automation**: Handles the entire web workflow, from logging in to filling out and submitting forms.
-* **Multi-Tag Support**: Allows for a predefined list of tags to be automatically added to each question on the website.
-* **Robust Error Handling**: Implements smart waits and error management to ensure the scripts run stably.
+</div>
 
 ---
 
-## ⚙️ How It Works
+<a name="-راهنمای-فارسی"></a>
+## 🇮🇷 راهنمای فارسی
 
-The project follows a simple, two-script workflow:
+### 💡 معرفی پروژه
+این پروژه یک ابزار جامع، مدرن و تحت وب برای **استخراج ۱۰۰٪ خودکار سوالات چهارگزینه‌ای از فایل‌های PDF آزمون** (کنکور کارشناسی، ارشد، دکتری، استخدامی و ...) با بهره‌گیری از مدل‌های بینایی پیشرفته **Google Gemini AI** و **ثبت دسته‌جمعی و بدون نقص آن‌ها در سامانه سنجشکده ([sanjeshkade.ir](https://sanjeshkade.ir))** است.
 
-1.  **Initial Input**: A quiz file, `Test.pdf`.
-    `⬇️`
-2.  **Script 1: `extractor.py`**:
-    * Converts the PDF into a series of high-resolution images.
-    * Sends each image to the **Gemini API** for analysis.
-    * Receives and processes the structured data.
-    * Saves the output to `questions.json`.
-    `⬇️`
-3.  **Intermediate File**: `questions.json`.
-    `⬇️`
-4.  **Script 2: `automator.py`**:
-    * Reads and parses `questions.json`.
-    * Launches a browser with **Selenium** and logs into the target website.
-    * Navigates to the "Create Question" page.
-    * Loops through each question, populating the web form and submitting it.
-`⬇️`
-5.  **Final Result**: All questions are successfully uploaded to the website.
+با استفاده از این ابزار، نیازی به ساعت‌ها کپی‌پیست دستی، تایپ فرمول‌ها، تنظیم گزینه‌ها و انتخاب تک‌تک کلیدها در فرم‌های وب نخواهید داشت.
 
 ---
 
-## 📦 Prerequisites & Installation
-
-To run this project, you will need the following:
-
-1.  **Python 3.7+**
-2.  **Poppler**: The `pdf2image` library requires this utility. Download it and add its `bin` directory to your system's `PATH`.
-    * [Download Poppler for Windows](https://github.com/oschwartz10612/poppler-windows/releases/)
-3.  **Python Libraries**: Install the necessary packages using pip:
-    ```bash
-    pip install google-generativeai selenium pdf2image Pillow
-    ```
-4.  **Google Chrome** and a compatible **ChromeDriver**. (Note: Modern versions of Selenium can manage ChromeDriver automatically).
-
----
-
-## 🔧 Configuration
-
-Before running the scripts, you must configure the following settings:
-
-#### In `extractor.py`:
-
-* `API_KEY`: Set your Google AI Studio API key.
-    ```python
-    API_KEY = "YOUR_GOOGLE_AI_API_KEY"
-    ```
-
-#### In `automator.py`:
-
-* **Login Credentials**: Enter your username and password for the target website.
-    ```python
-    YOUR_USERNAME = "your_email@example.com"
-    YOUR_PASSWORD = "your_password"
-    ```
-    > **⚠️ Security Warning**: Never commit this file with your real credentials to a public GitHub repository.
-
-* **URLs and Settings**: Adjust the `LOGIN_URL`, `CREATE_QUESTION_URL`, `TAGS_TO_ADD`, and `QQQ_SESSION_NUMBER` variables to match your specific needs.
+### ✨ ویژگی‌های برجسته
+* **🧠 بینایی ماشین فوق‌العاده با Gemini:** استخراج دقیق متن سوالات، گزینه‌ها، متن‌های درک مطلب طولانی (Reading Comprehension)، عبارات انگلیسی و فرمول‌های LaTeX.
+* **🔑 استخراج و تطبیق خودکار کلید پاسخنامه:** خواندن هوشمند جدول کلید پاسخنامه سازمان سنجش از صفحه آخر دفترچه یا تشخیص خودکار گزینه پررنگ (Bold).
+* **⚡ بدون نیاز به ابزارهای جانبی (No Poppler):** تبدیل پرسرعت صفحات PDF به تصاویر باکیفیت به صورت درونی با کتابخانه مدرن `PyMuPDF` (بدون نیاز به نصب Poppler یا تنظیم PATH).
+* **📊 داشبورد وب تعاملی و مدرن (Streamlit):**
+  * جدول داده زنده برای ویرایش سریع شماره سوالات، گزینه‌ها و کلید صحیح.
+  * بازبین و ویرایشگر اختصاصی برای متون بلند، ریدینگ‌ها و فرمول‌ها.
+  * ذخیره دائمی، پشتیبان‌گیری و خروجی `JSON`.
+* **🌐 اتوماسیون هوشمند و پایدار سنجشکده:**
+  * ورود خودکار به سامانه و ثبت بدون وقفه سوالات.
+  * **موتور انطباق هوشمند تگ‌ها (Smart Tag Matching):** اتصال مستقیم به `tagService` سامانه و استعلام موضوعات معتبر دیتابیس بدون خطای تایم‌اوت.
+  * پایدارسازی گرافیکی لینوکس/Wayland و اعمال DNS مستقیم برای جلوگیری از اختلال شبکه.
+  * حالت پس‌زمینه (Headless Mode) و پشتیبانی از پروکسی برای درخواست‌های هوش مصنوعی.
 
 ---
 
-## 🚀 Usage Guide
+### 🚀 راهنمای سریع راه‌اندازی (یک کلیک)
 
-1.  **Clone the Repository**:
-    ```bash
-    git clone [https://github.com/your-username/your-repo-name.git](https://github.com/your-username/your-repo-name.git)
-    cd your-repo-name
-    ```
-2.  **Install Prerequisites**: Follow the installation guide above to set up your environment.
-3.  **Configure Scripts**: Edit the Python files to set your API key and user credentials.
-4.  **Place PDF**: Put your quiz PDF file in the main project directory.
-5.  **Run the Extractor Script**:
-    ```bash
-    python extractor.py
-    ```
-    The script will prompt you for the PDF filename, the total number of questions, and the answer key method. Once finished, it will generate a `_extracted_questions.json` file.
+#### 🖥️ ویندوز (Windows)
+فقط کافیست روی فایل **`run.bat`** دوبار کلیک کنید! 
+> این اسکریپت در صورت نیاز، پایتون را نصب کرده، محیط مجازی `.venv` را آماده می‌کند، پکیج‌ها را نصب کرده و داشبورد را در مرورگر باز می‌کند.
 
-6.  **Run the Automator Script**:
-    ```bash
-    python automator.py
-    ```
-    This will launch the browser, log in, and begin uploading the questions automatically.
+#### 🐧 لینوکس / مک (Linux / macOS)
+ترمینال را در پوشه پروژه باز کنید و دستور زیر را اجرا نمایید:
+```bash
+bash run.sh
+```
+یا:
+```bash
+chmod +x run.sh
+./run.sh
+```
 
 ---
 
-## 📁 Project Structure
+### 🛠️ راه‌اندازی دستی (Manual Installation)
+
+#### ۱. پیش‌نیازها
+* پایتون نسخه 3.9 یا بالاتر ([دانلود پایتون](https://www.python.org/downloads/))
+* مرورگر Google Chrome
+
+#### ۲. کلون کردن مخزن و ورود به پوشه
+```bash
+git clone https://github.com/Hamed-rasooli/question-extractor.git
+cd question-extractor
+```
+
+#### ۳. ایجاد و فعال‌سازی محیط مجازی (Virtual Environment)
+* **ویندوز (PowerShell / CMD):**
+  ```powershell
+  python -m venv .venv
+  .venv\Scripts\activate
+  ```
+* **لینوکس / مک (Bash / Zsh):**
+  ```bash
+  python3 -m venv .venv
+  source .venv/bin/activate
+  ```
+
+#### ۴. نصب پیش‌نیازها
+```bash
+pip install --upgrade pip
+pip install -r requirements.txt
+```
+
+#### ۵. اجرای برنامه
+```bash
+streamlit run app.py
+```
+سپس مرورگر را باز کرده و به آدرس `http://localhost:8501` بروید.
+
+---
+
+### 📖 راهنمای گام‌به‌گام کار با برنامه
+
+1. **تنظیمات اولیه (سایدبار راست):**
+   * **کلید API گوگل:** کلید اختصاصی خود را از [Google AI Studio](https://aistudio.google.com/app/apikey) دریافت کرده و وارد کنید.
+   * **اطلاعات سنجشکده:** نام کاربری، رمز عبور، آدرس صفحه ایجاد سوال درس (مثلاً `https://sanjeshkade.ir/User/Lessons/CreateQuestion/155`)، شماره جلسه/سال (مثلاً `1403`) و عنوان آزمون/تگ پیش‌فرض را وارد فرمایید.
+   *(تنظیمات شما به صورت امن و محلی ذخیره می‌شوند).*
+2. **تب ۱ (استخراج هوشمند از PDF):**
+   * فایل PDF آزمون را بارگذاری کنید.
+   * محدوده صفحات سوالات و صفحه کلید پاسخنامه را مشخص کنید.
+   * دکمه **شروع استخراج هوشمند** را بزنید تا هوش مصنوعی پردازش را آغاز کند.
+3. **تب ۲ (مشاهده و ویرایش):**
+   * سوالات استخراج‌شده را در جدول مشاهده و در صورت نیاز متن یا کلیدها را تصحیح کنید.
+   * می‌توانید خروجی `JSON` را برای استفاده‌های بعدی دانلود کنید.
+4. **تب ۳ (بارگذاری خودکار در سنجشکده):**
+   * پیش‌نمایش تگ‌ها و وضعیت سوالات را بررسی کنید.
+   * روی **شروع فرآیند بارگذاری خودکار** کلیک کنید و گزارش زنده ورود و ثبت سوالات را مشاهده نمایید.
+
+---
+
+<br/>
+
+<a name="-english-guide"></a>
+## 🇬🇧 English Guide
+
+### 💡 Overview
+**AI Question Extractor & Automator** is a modern, end-to-end web tool designed to automatically extract multiple-choice questions (MCQs), options, and official answer keys from exam PDF booklets using **Google Gemini Vision AI**, and systematically upload them directly into the **Sanjeshkade platform ([sanjeshkade.ir](https://sanjeshkade.ir))** using Selenium automation.
+
+Say goodbye to tedious manual copy-pasting, formatting LaTeX formulas, and manual key selection.
+
+---
+
+### ✨ Key Features
+* **🧠 Gemini AI Multimodal Extraction:** High-accuracy extraction of Persian & English text, reading passages, mathematical formulas (LaTeX), and option structures.
+* **🔑 Automated Answer Key Pairing:** Reads answer tables from dedicated key pages or detects bolded option choices automatically.
+* **⚡ Zero External Binaries:** High-speed PDF page rendering powered by `PyMuPDF` (no Poppler installation or PATH configuration required).
+* **📊 Modern Interactive Web Dashboard (Streamlit):**
+  * Dynamic data editor table for batch edits.
+  * Specialized inspector view for reading comprehension and formula checks.
+  * Local auto-persistence & `JSON` backup import/export.
+* **🌐 Robust Sanjeshkade Automator:**
+  * Automated login, question filling, option checking, and submission.
+  * **Smart Tag Resolver:** Direct integration with Sanjeshkade's internal `tagService` API with fuzzy subject matching and year-string sanitization.
+  * Linux Wayland GPU stabilization and direct host DNS mapping.
+  * Headless browser mode & AI proxy support.
+
+---
+
+### 🚀 Quick Start (One-Click)
+
+#### 🖥️ Windows
+Simply double-click **`run.bat`**.
+> Automatically provisions Python if needed, creates an isolated virtual environment, installs dependencies, and launches the dashboard.
+
+#### 🐧 Linux / macOS
+Open a terminal in the project directory and run:
+```bash
+bash run.sh
+```
+
+---
+
+### 🛠️ Manual Installation
+
+```bash
+# 1. Clone repository
+git clone https://github.com/Hamed-rasooli/question-extractor.git
+cd question-extractor
+
+# 2. Create virtual environment
+python3 -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# 3. Install packages
+pip install --upgrade pip
+pip install -r requirements.txt
+
+# 4. Launch web dashboard
+streamlit run app.py
+```
+
+---
+
+### 📁 Project Structure
+
+```text
+question-extractor/
+├── app.py                  # Streamlit Web Dashboard & UI controller
+├── core_extractor.py       # AI Vision Engine & Answer Key parser (Gemini + PyMuPDF)
+├── core_automator.py       # Selenium Web Automator & Sanjeshkade Tag Resolver
+├── requirements.txt        # Python dependency manifest
+├── run.sh                  # One-click Linux / macOS launcher
+├── run.bat                 # One-click Windows launcher
+├── .streamlit/
+│   └── config.toml         # Dark theme & custom Streamlit configuration
+├── .gitignore              # Git ignore rules (protects credentials & local caches)
+└── README.md               # Bilingual documentation & guides
+```
+
+---
+
+### ☕ Support & Contribution
+
+If this project saved you hours of manual work, consider giving it a **⭐️ Star on GitHub**!
+
+Created by **[Hamed Rasooli](https://github.com/Hamed-rasooli)**. Contributions, bug reports, and suggestions are welcome!

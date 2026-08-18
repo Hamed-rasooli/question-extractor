@@ -1,0 +1,28 @@
+# Python & Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Streamlit Configuration (Keep Theme/Config)
+!.streamlit/config.toml
+
+# Screenshots & Debug Files
+error_*.png
+debug_*.png
+pages_output/
+*.log
+
+# Sensitive Credentials & Local Cache
+config_local.json
+extracted_questions.json
+*.json
+!example.json
+
+# Legacy Standalone CLI Scripts
+automator.py
+extractor.py
