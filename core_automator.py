@@ -1,16 +1,17 @@
 import time
 import os
+import sys
 import re
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.options import Options as ChromeOptions
+from selenium.webdriver.chrome.service import Service as ChromeService
 
 
-def create_driver(headless=False):
-    """ساخت و پیکربندی درایور مرورگر کروم همراه با پایدارسازی مانیتورها و DNS مستقیم"""
-    options = Options()
+def _configure_chromium_options(options, headless=False):
+    """اعمال فلگ‌های بهینه‌سازی و پایدارسازی روی گزینه‌های کرومیوم (Chrome و Edge)"""
     if headless:
         options.add_argument("--headless=new")
     options.add_argument("--no-sandbox")
@@ -24,10 +25,124 @@ def create_driver(headless=False):
     
     # حل قطعی مشکل DNS و اتصال مستقیم به سرورهای سنجشکده
     options.add_argument("--host-resolver-rules=MAP sanjeshkade.ir 185.2.14.61, MAP www.sanjeshkade.ir 185.2.14.61")
-    
-    driver = webdriver.Chrome(options=options)
-    driver.maximize_window()
-    return driver
+    options.add_argument("--ignore-certificate-errors")
+    options.add_argument("--allow-running-insecure-content")
+    options.add_argument("--disable-blink-features=AutomationControlled")
+
+
+def create_driver(headless=False, log_callback=None):
+    """
+    ساخت و راه‌اندازی ضدخطا و خودترمیمی درایور مرورگر.
+    سازگار با تمام سیستم‌ها و لپ‌تاپ‌های مختلف:
+    ۱. دانلود و تنظیم خودکار درایور منطبق با نسخه نصب‌شده کروم (حل قطعی خطای session not created)
+    ۲. پشتیبان خودکار مرورگر Microsoft Edge (پیش‌فرض روی تمام ویندوزهای ۱۰ و ۱۱)
+    ۳. پشتیبان نهایی Mozilla Firefox
+    """
+    def log(msg):
+        if log_callback:
+            log_callback(msg)
+        print(msg)
+
+    errors = []
+
+    # -------------------------------------------------------------
+    # استراتژی ۱: تلاش با Google Chrome و webdriver-manager
+    # (دانلود خودکار درایور کاملاً منطبق با نسخه دقیق کروم کاربر و بای‌پس درایورهای قدیمی PATH)
+    # -------------------------------------------------------------
+    try:
+        from webdriver_manager.chrome import ChromeDriverManager
+        
+        chrome_opts = ChromeOptions()
+        _configure_chromium_options(chrome_opts, headless=headless)
+
+        driver_path = ChromeDriverManager().install()
+        if driver_path and os.path.exists(driver_path):
+            if os.path.isdir(driver_path):
+                exe_name = "chromedriver.exe" if sys.platform.startswith("win") else "chromedriver"
+                candidate = os.path.join(driver_path, exe_name)
+                if os.path.exists(candidate):
+                    driver_path = candidate
+
+            service = ChromeService(executable_path=driver_path)
+            driver = webdriver.Chrome(service=service, options=chrome_opts)
+            driver.maximize_window()
+            return driver
+    except Exception as e:
+        errors.append(f"Google Chrome (webdriver-manager): {e}")
+
+    # -------------------------------------------------------------
+    # استراتژی ۲: تلاش با Google Chrome از طریق Selenium Manager داخلی
+    # -------------------------------------------------------------
+    try:
+        chrome_opts = ChromeOptions()
+        _configure_chromium_options(chrome_opts, headless=headless)
+
+        driver = webdriver.Chrome(options=chrome_opts)
+        driver.maximize_window()
+        return driver
+    except Exception as e:
+        errors.append(f"Google Chrome (Selenium Manager): {e}")
+
+    # -------------------------------------------------------------
+    # استراتژی ۳: پشتیبان نجات‌بخش Microsoft Edge (پیش‌فرض روی ۱۰۰٪ سیستم‌های ویندوز)
+    # -------------------------------------------------------------
+    try:
+        log("⚠️ اجرای کروم با مشکل نسخه مواجه شد؛ در حال فعال‌سازی خودکار مرورگر Microsoft Edge...")
+        from selenium.webdriver.edge.options import Options as EdgeOptions
+        from selenium.webdriver.edge.service import Service as EdgeService
+
+        edge_opts = EdgeOptions()
+        _configure_chromium_options(edge_opts, headless=headless)
+
+        # تلاش با webdriver-manager برای Edge
+        try:
+            from webdriver_manager.microsoft import EdgeChromiumDriverManager
+            edge_driver_path = EdgeChromiumDriverManager().install()
+            if edge_driver_path and os.path.exists(edge_driver_path):
+                if os.path.isdir(edge_driver_path):
+                    exe_name = "msedgedriver.exe" if sys.platform.startswith("win") else "msedgedriver"
+                    candidate = os.path.join(edge_driver_path, exe_name)
+                    if os.path.exists(candidate):
+                        edge_driver_path = candidate
+                edge_service = EdgeService(executable_path=edge_driver_path)
+                driver = webdriver.Edge(service=edge_service, options=edge_opts)
+                driver.maximize_window()
+                log("✅ مرورگر Microsoft Edge با درایور هماهنگ راه‌اندازی شد.")
+                return driver
+        except Exception:
+            pass
+
+        # تلاش مستقیم با Edge داخلی
+        driver = webdriver.Edge(options=edge_opts)
+        driver.maximize_window()
+        log("✅ مرورگر Microsoft Edge با موفقیت راه‌اندازی شد.")
+        return driver
+    except Exception as e:
+        errors.append(f"Microsoft Edge: {e}")
+
+    # -------------------------------------------------------------
+    # استراتژی ۴: پشتیبان نهایی Firefox
+    # -------------------------------------------------------------
+    try:
+        log("⚠️ در حال تلاش برای راه‌اندازی با Mozilla Firefox...")
+        from selenium.webdriver.firefox.options import Options as FirefoxOptions
+        ff_opts = FirefoxOptions()
+        if headless:
+            ff_opts.add_argument("--headless")
+        driver = webdriver.Firefox(options=ff_opts)
+        driver.maximize_window()
+        log("✅ مرورگر Firefox با موفقیت راه‌اندازی شد.")
+        return driver
+    except Exception as e:
+        errors.append(f"Firefox: {e}")
+
+    # در صورت شکست کلیه روش‌ها
+    error_summary = "\n".join(errors)
+    raise RuntimeError(
+        f"عدم امکان راه‌اندازی مرورگرهای سیستم (Chrome / Edge / Firefox).\n"
+        f"جزئیات خطاها:\n{error_summary}\n\n"
+        f"راهکار: لطفاً مرورگر Google Chrome یا Microsoft Edge سیستم خود را آپدیت فرمایید."
+    )
 
 
 def login_sanjeshkade(driver, wait, username, password, log_callback=None):
@@ -210,8 +325,8 @@ def run_sanjeshkade_automation(username, password, create_question_url, session_
     errors = []
 
     try:
-        log("در حال راه‌اندازی مرورگر کروم با کانکشن مستقیم سنجشکده...")
-        driver = create_driver(headless=headless)
+        log("در حال راه‌اندازی مرورگر (Chrome / Edge) با کانکشن مستقیم سنجشکده...")
+        driver = create_driver(headless=headless, log_callback=log)
         wait = WebDriverWait(driver, 20)
 
         # ۱. لاگین
