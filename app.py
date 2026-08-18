@@ -405,15 +405,11 @@ with tab1:
         "مدل هوش مصنوعی را انتخاب کنید:",
         [
             "gemini-2.5-flash",
-            "gemini-3.1-flash-lite",
-            "gemini-2.5-flash-lite",
-            "gemini-2.0-flash"
+            "gemini-3.1-flash-lite"
         ],
         format_func=lambda x: {
             "gemini-2.5-flash": "🌟 Gemini 2.5 Flash (پیشنهادی - بالاترین دقت استدلال و درک جداول)",
-            "gemini-3.1-flash-lite": "⚡ Gemini 3.1 Flash-Lite (نسخه مدرن ۳.۱ - فوق‌العاده سریع، دقیق و بهینه)",
-            "gemini-2.5-flash-lite": "✨ Gemini 2.5 Flash-Lite (سریع، سبک و بدون قطعی)",
-            "gemini-2.0-flash": "🚀 Gemini 2.0 Flash (سریع و با سهمیه ترافیک بالا)"
+            "gemini-3.1-flash-lite": "⚡ Gemini 3.1 Flash-Lite (نسخه مدرن ۳.۱ - فوق‌العاده سریع، دقیق و بهینه)"
         }.get(x, x),
         help="تمامی این مدل‌ها در اکانت‌های رایگان Google AI Studio فعال هستند."
     )

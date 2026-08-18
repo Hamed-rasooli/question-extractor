@@ -300,7 +300,7 @@ def generate_content_with_resilience(client, primary_model, parts, response_mime
     و سوئیچ هوشمند به مدل‌های جایگزین
     """
     candidate_models = [primary_model]
-    for alt in ["gemini-2.5-flash", "gemini-3.1-flash-lite", "gemini-2.5-flash-lite", "gemini-2.0-flash"]:
+    for alt in ["gemini-2.5-flash", "gemini-3.1-flash-lite"]:
         if alt not in candidate_models:
             candidate_models.append(alt)
 
