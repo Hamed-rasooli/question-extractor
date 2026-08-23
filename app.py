@@ -65,8 +65,12 @@ st.set_page_config(
 saved_config = load_local_config()
 
 # مقداردهی اولیه سشن استیت با حافظه دیسک
-if "questions" not in st.session_state:
-    st.session_state["questions"] = load_cached_questions()
+if "questions" not in st.session_state or not st.session_state["questions"]:
+    cached = load_cached_questions()
+    if cached:
+        st.session_state["questions"] = cached
+    else:
+        st.session_state["questions"] = []
 
 if "api_key" not in st.session_state:
     st.session_state["api_key"] = saved_config.get("api_key", "")
@@ -397,6 +401,30 @@ with tab1:
             key="uploader_key"
         )
 
+    # امکان بارگذاری سریع فایل JSON قبلی مستقیم در تب ۱
+    with st.expander("📂 یا بارگذاری مستقیم فایل JSON استخراج‌شده قبلی (بدون نیاز به پردازش مجدد PDF)"):
+        uploaded_json_tab1 = st.file_uploader(
+            "انتخاب فایل JSON سوالات:",
+            type=["json"],
+            key="uploader_json_tab1"
+        )
+        if uploaded_json_tab1 is not None:
+            file_sig_t1 = f"{uploaded_json_tab1.name}_{uploaded_json_tab1.size}"
+            if st.session_state.get("last_imported_file_sig") != file_sig_t1:
+                try:
+                    uploaded_json_tab1.seek(0)
+                    loaded_data_t1 = json.load(uploaded_json_tab1)
+                    if isinstance(loaded_data_t1, list) and len(loaded_data_t1) > 0:
+                        st.session_state["questions"] = loaded_data_t1
+                        st.session_state["last_imported_file_sig"] = file_sig_t1
+                        save_cached_questions(loaded_data_t1)
+                        st.toast(f"✅ تعداد {len(loaded_data_t1)} سوال با موفقیت بارگذاری شد.", icon="🎉")
+                        st.rerun()
+                    else:
+                        st.error("❌ فایل JSON فاقد ساختار معتبر است.")
+                except Exception as err:
+                    st.error(f"❌ خطا در بارگذاری فایل JSON: {err}")
+
     st.markdown("<br>", unsafe_allow_html=True)
     
     # بخش ۲: انتخاب مدل هوش مصنوعی
@@ -513,6 +541,10 @@ with tab1:
 # --- تب ۲: پیش‌نمایش، ویرایش جدول و بازبینی تکی سوالات ---
 with tab2:
     questions = st.session_state.get("questions", [])
+    if not questions:
+        questions = load_cached_questions()
+        if questions:
+            st.session_state["questions"] = questions
     
     col_stat, col_import, col_reset = st.columns([1.5, 1, 1], gap="medium")
     with col_stat:
@@ -522,22 +554,34 @@ with tab2:
             st.info("💡 هنوز سوالی در حافظه نیست. فایل PDF را در تب اول استخراج کنید یا یک فایل JSON بارگذاری نمایید.")
             
     with col_import:
-        uploaded_json = st.file_uploader("📂 بارگذاری فایل JSON قبلی:", type=["json"], label_visibility="collapsed")
+        uploaded_json = st.file_uploader(
+            "📂 بارگذاری فایل JSON قبلی:",
+            type=["json"],
+            label_visibility="collapsed",
+            key="uploader_json_tab2"
+        )
         if uploaded_json is not None:
-            try:
-                loaded_data = json.load(uploaded_json)
-                if isinstance(loaded_data, list):
-                    st.session_state["questions"] = loaded_data
-                    save_cached_questions(loaded_data)
-                    st.success(f"✅ تعداد {len(loaded_data)} سوال با موفقیت بارگذاری شد.")
-                    st.rerun()
-            except Exception as err:
-                st.error(f"خطا در خواندن فایل JSON: {err}")
+            file_sig = f"{uploaded_json.name}_{uploaded_json.size}"
+            if st.session_state.get("last_imported_file_sig") != file_sig:
+                try:
+                    uploaded_json.seek(0)
+                    loaded_data = json.load(uploaded_json)
+                    if isinstance(loaded_data, list) and len(loaded_data) > 0:
+                        st.session_state["questions"] = loaded_data
+                        st.session_state["last_imported_file_sig"] = file_sig
+                        save_cached_questions(loaded_data)
+                        st.toast(f"✅ تعداد {len(loaded_data)} سوال با موفقیت بارگذاری گردید.", icon="🎉")
+                        st.rerun()
+                    else:
+                        st.error("❌ فایل JSON فاقد ساختار معتبر (لیست سوالات) است.")
+                except Exception as err:
+                    st.error(f"❌ خطا در خواندن فایل JSON: {err}")
                 
     with col_reset:
         if questions:
             if st.button("🗑 پاکسازی حافظه آزمون فعلی", width="stretch"):
                 st.session_state["questions"] = []
+                st.session_state["last_imported_file_sig"] = None
                 save_cached_questions([])
                 st.rerun()
 
@@ -660,6 +704,10 @@ with tab2:
 # --- تب ۳: بارگذاری خودکار در سنجشکده ---
 with tab3:
     questions_to_upload = st.session_state.get("questions", [])
+    if not questions_to_upload:
+        questions_to_upload = load_cached_questions()
+        if questions_to_upload:
+            st.session_state["questions"] = questions_to_upload
     
     if not questions_to_upload:
         st.warning("⚠️ هیچ سوالی برای بارگذاری آماده نیست. ابتدا سوالات را استخراج فرمایید.")
