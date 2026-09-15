@@ -143,6 +143,7 @@ def create_driver(headless=False, log_callback=None):
         f"جزئیات خطاها:\n{error_summary}\n\n"
         f"راهکار: لطفاً مرورگر Google Chrome یا Microsoft Edge سیستم خود را آپدیت فرمایید."
     )
+get_browser_driver = create_driver
 
 
 def login_sanjeshkade(driver, wait, username, password, log_callback=None):

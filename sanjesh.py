@@ -42,10 +42,10 @@ def get_sanjeshkade_cookies(username, password, headless=True, log_callback=None
         print(msg)
 
     log("🌐 در حال راه‌اندازی مرورگر نامرئی جهت ورود امن به سنجشکده...")
-    from core_automator import get_browser_driver, login_sanjeshkade
+    from core_automator import create_driver, login_sanjeshkade
     from selenium.webdriver.support.ui import WebDriverWait
 
-    driver = get_browser_driver(headless=headless, log_callback=log_callback)
+    driver = create_driver(headless=headless, log_callback=log_callback)
     wait = WebDriverWait(driver, 25)
 
     try:
