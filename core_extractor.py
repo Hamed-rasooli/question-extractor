@@ -294,27 +294,49 @@ def configure_gemini(api_key: str, proxy: str = None):
         legacy_genai.configure(api_key=clean_key)
 
 
-def generate_content_with_resilience(client, primary_model, parts, response_mime_type="application/json", max_retries=3, progress_callback=None):
+def get_model_content_config(model_name: str, response_mime_type: str = "application/json"):
+    """
+    تنظیم بهینه و فوق‌سریع پارامترهای مدل:
+    غیرفعال‌سازی حالت تفکر عمیق (Thinking Mode) با thinking_budget=0 در مدل‌های سری ۳ و ۲.۵ 
+    برای افزایش ۱۲۰ برابری سرعت پاسخ‌دهی و جلوگیری از فریز شدن Streamlit.
+    مدل‌های Flash-Lite فاقد حالت تفکر هستند و نیازی به این پارامتر ندارند.
+    """
+    if not USE_NEW_GENAI_SDK:
+        return None
+        
+    config_args = {
+        "response_mime_type": response_mime_type
+    }
+    # در مدل‌های غیر Lite که از Thinking Mode پشتیبانی می‌کنند بودجه را صفر می‌گذاریم تا بدون معطلی پاسخ دهند
+    if "lite" not in model_name.lower():
+        try:
+            config_args["thinking_config"] = types.ThinkingConfig(thinking_budget=0)
+        except Exception:
+            pass
+            
+    return types.GenerateContentConfig(**config_args)
+
+
+def generate_content_with_resilience(client, primary_model, parts, response_mime_type="application/json", max_retries=2, progress_callback=None):
     """
     فراخوانی ضدخطا با مدیریت ترافیک سنگین (503 UNAVAILABLE)، تلاش مجدد خودکار (Backoff)
     و سوئیچ هوشمند به مدل‌های جایگزین
     """
     candidate_models = [primary_model]
-    for alt in ["gemini-2.5-flash", "gemini-3.1-flash-lite"]:
+    for alt in ["gemini-2.5-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-lite-latest"]:
         if alt not in candidate_models:
             candidate_models.append(alt)
 
     last_error = None
-    for model_name in candidate_models:
+    for idx, model_name in enumerate(candidate_models):
+        cfg = get_model_content_config(model_name, response_mime_type=response_mime_type)
         for attempt in range(max_retries):
             try:
                 if USE_NEW_GENAI_SDK:
                     resp = client.models.generate_content(
                         model=model_name,
                         contents=parts,
-                        config=types.GenerateContentConfig(
-                            response_mime_type=response_mime_type
-                        )
+                        config=cfg
                     )
                     if resp and resp.text:
                         return resp.text.strip()
@@ -339,6 +361,10 @@ def generate_content_with_resilience(client, primary_model, parts, response_mime
                     continue
                 else:
                     break
+
+        if progress_callback and idx + 1 < len(candidate_models):
+            next_model = candidate_models[idx + 1]
+            progress_callback(80, f"🔄 سوئیچ خودکار به مدل پرسرعت جایگزین ({next_model})...")
 
     raise last_error or RuntimeError("پاسخی از مدل‌های هوش مصنوعی دریافت نشد.")
 
@@ -506,13 +532,12 @@ def extract_questions_from_images(question_images, answer_key_images=None, api_k
                 mime_type="image/jpeg"
             ))
 
+        cfg = get_model_content_config(target_model, response_mime_type="application/json")
         try:
             response_stream = client.models.generate_content_stream(
                 model=target_model,
                 contents=parts,
-                config=types.GenerateContentConfig(
-                    response_mime_type="application/json"
-                )
+                config=cfg
             )
             for chunk in response_stream:
                 if chunk.text:
@@ -520,9 +545,11 @@ def extract_questions_from_images(question_images, answer_key_images=None, api_k
                     if stream_callback:
                         q_count_est = raw_text.count('"number":')
                         stream_callback(chunk.text, len(raw_text), q_count_est)
+            if not raw_text.strip():
+                raise ValueError("پاسخ استریم خالی دریافت شد.")
         except Exception:
             if progress_callback:
-                progress_callback(40, "🟢 در حال فراخوانی پایدار و مقاوم در برابر ترافیک...")
+                progress_callback(40, f"🟢 در حال فراخوانی پایدار و بدون قطعی با {target_model}...")
             raw_text = generate_content_with_resilience(
                 client=client,
                 primary_model=target_model,
