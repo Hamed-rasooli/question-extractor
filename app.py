@@ -9,6 +9,8 @@ from core_extractor import (
     extract_answer_key_dict
 )
 from core_automator import run_sanjeshkade_automation
+from sanjesh import run_batch_lesson_plan_generation, normalize_lesson_url
+
 
 # مسیرهای فایل‌های ذخیره‌سازی محلی (Auto-Persistence)
 CONFIG_FILE = "config_local.json"
@@ -377,7 +379,12 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # تب‌های اصلی
-tab1, tab2, tab3 = st.tabs(["🚀 ۱. استخراج هوشمند از PDF", "📋 ۲. مشاهده و ویرایش سوالات", "🌐 ۳. بارگذاری خودکار در سنجشکده"])
+tab1, tab2, tab3, tab4 = st.tabs([
+    "🚀 ۱. استخراج هوشمند از PDF",
+    "📋 ۲. مشاهده و ویرایش سوالات",
+    "🌐 ۳. بارگذاری خودکار در سنجشکده",
+    "📚 ۴. ساخت خودکار درسنامه"
+])
 
 # --- تب ۱: استخراج ---
 with tab1:
@@ -780,6 +787,108 @@ with tab3:
                     st.success(f"🎉 تبریک! تعداد {result['success']} سوال با موفقیت در سامانه سنجشکده ثبت شد.")
                 else:
                     st.error(f"❌ خطا در فرآیند ثبت: {result.get('error', 'عدم ثبت سوالات')}")
+
+# --- تب ۴: ساخت خودکار درسنامه در سنجشکده ---
+with tab4:
+    st.markdown("### 📚 ساخت خودکار و دسته‌جمعی درسنامه‌ها در سنجشکده")
+    st.caption("این ابزار تمامی سوالات ثبت‌شده در درس مورد نظر را استخراج کرده و به صورت خودکار با هوش مصنوعی برای تک‌تک آن‌ها درسنامه (Lesson Plan) تولید می‌کند.")
+
+    # تشخیص هوشمند پیش‌فرض آدرس درس از تنظیمات
+    default_target_url = "https://sanjeshkade.ir/User/Lessons/Questions/300"
+    if sanjeshkade_url:
+        try:
+            default_target_url = normalize_lesson_url(sanjeshkade_url)
+        except Exception:
+            default_target_url = sanjeshkade_url
+
+    st.markdown("""
+    <div class="section-card">
+        <p style="margin: 0 0 8px 0; font-size: 1.05rem;">🎯 <b>تولید درسنامه خودکار (GenerateLessonPlanBatch):</b></p>
+        <p style="margin: 0 0 6px 0; color: #9ca3af; font-size: 0.92rem; line-height: 1.8;">
+            ۱. سامانه با نام کاربری و رمز عبور شما در حالت نامرئی وارد سنجشکده شده و کوکی‌های فعال را برمی‌دارد.<br>
+            ۲. فهرست تمام سوالات موجود در درس مقصد را استخراج می‌کند.<br>
+            ۳. درخواست‌های تولید درسنامه به صورت خودکار، پشت‌سرهم و با نوار وضعیت زنده ثبت می‌شوند.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    col_lesson_url, col_lesson_delay = st.columns([2.5, 1], gap="medium")
+    with col_lesson_url:
+        target_lesson_input = st.text_input(
+            "🔗 آدرس صفحه سوالات یا شناسه درس مقصد:",
+            value=default_target_url,
+            help="می‌توانید آدرس کامل صفحه سوالات یا فقط شماره درس (مثلاً 300) را وارد نمایید."
+        )
+    with col_lesson_delay:
+        lesson_delay_input = st.number_input(
+            "⏱️ وقفه بین سوالات (ثانیه):",
+            min_value=0.2,
+            max_value=10.0,
+            value=1.0,
+            step=0.2,
+            help="جهت جلوگیری از فشار به سرور سنجشکده و پردازش بدون خطای بک‌اند"
+        )
+
+    with st.expander("🔑 ورود دستی کوکی نشست (اختیاری - ویژه کاربران حرفه‌ای)"):
+        st.markdown("""
+        اگر مایلید بدون لاگین خودکار سلنیوم مستقیماً از کوکی مرورگر باز خود استفاده کنید، متن کامل هدر Cookie را در زیر قرار دهید:
+        """)
+        manual_cookie = st.text_area(
+            "متن کوکی مرورگر (.AspNetCore.Cookies و .AspNetCore.Antiforgery):",
+            value="",
+            height=70,
+            placeholder=".AspNetCore.Antiforgery.xxx=...; .AspNetCore.Cookies=..."
+        )
+
+    btn_start_lesson = st.button("🚀 شروع ورود و ساخت خودکار درسنامه‌ها", type="primary", width="stretch")
+
+    if btn_start_lesson:
+        if not manual_cookie.strip() and (not sanjeshkade_user or not sanjeshkade_pass):
+            st.error("❌ لطفاً نام کاربری و رمز عبور سنجشکده را در سایدبار راست وارد فرمایید (یا کوکی دستی را در بخش تنظیمات وارد نمایید).")
+        else:
+            lp_progress = st.progress(0)
+            lp_status = st.empty()
+            lp_metrics = st.empty()
+            lp_log_box = st.empty()
+
+            log_history = []
+
+            def handle_lp_log(msg):
+                log_history.append(msg)
+                lp_log_box.code("\n".join(log_history[-10:]), language="text")
+
+            def handle_lp_progress(curr, total, qid, success, msg):
+                pct = int((curr / total) * 100) if total > 0 else 0
+                lp_progress.progress(pct)
+                lp_status.info(f"⏳ در حال پردازش سوال {curr} از {total} (شناسه سوال: {qid})...")
+
+            with st.spinner("در حال ارتباط با سامانه سنجشکده و پردازش درسنامه‌ها..."):
+                try:
+                    summary = run_batch_lesson_plan_generation(
+                        target_url_or_id=target_lesson_input,
+                        cookie_str=manual_cookie.strip() if manual_cookie.strip() else None,
+                        username=sanjeshkade_user,
+                        password=sanjeshkade_pass,
+                        delay=lesson_delay_input,
+                        progress_callback=handle_lp_progress,
+                        log_callback=handle_lp_log
+                    )
+
+                    lp_progress.progress(100)
+                    lp_status.success(f"🎉 عملیات ساخت درسنامه برای {summary['success_count']} سوال با موفقیت ارسال شد!")
+                    st.balloons()
+
+                    with lp_metrics.container():
+                        m1, m2, m3 = st.columns(3)
+                        with m1:
+                            st.metric("📊 کل سوالات درس", f"{summary['total']} سوال")
+                        with m2:
+                            st.metric("✅ درخواست‌های موفق", f"{summary['success_count']} سوال")
+                        with m3:
+                            st.metric("❌ خطاها", f"{summary['failed_count']} سوال")
+
+                except Exception as ex:
+                    st.error(f"❌ خطا در فرآیند تولید درسنامه: {ex}")
 
 # --- پاورقی و حمایت از گیت‌هاب ---
 st.markdown("""
