@@ -25,9 +25,10 @@
 ## 🇮🇷 راهنمای فارسی
 
 ### 🎯 این برنامه چه کاری براتون انجام میده؟ (نتیجه نهایی)
-1. **استخراج ۱۰۰٪ خودکار سوالات از PDF:** دفترچه آزمون (کنکور، ارشد، دکتری یا استخدامی) رو به برنامه می‌دید؛ هوش مصنوعی تمام سوالات، ۴ گزینه، متن‌های طولانی (ریدینگ‌ها) و فرمول‌ها رو دقیق استخراج می‌کنه.
+1. **استخراج ۱۰۰٪ خودکار سوالات از PDF:** دفترچه آزمون (کنکور، ارشد، دکتری یا استخدامی) رو به برنامه می‌دید؛ هوش مصنوعی تمام سوالات، ۴ گزینه، متن‌های طولانی (ریدینگ‌ها)، جدول‌ها و فرمول‌های LaTeX رو دقیق استخراج می‌کنه.
 2. **انطباق خودکار کلید پاسخنامه:** صفحه کلید آزمون رو می‌خونه و گزینه صحیح هر سوال رو خودش مشخص می‌کنه.
 3. **ثبت خودکار در سایت سنجشکده ([sanjeshkade.ir](https://sanjeshkade.ir)):** مرورگر رو باز می‌کنه، وارد اکانتتون میشه و تمام سوالات رو به همراه تگ و سال آزمون، دونه‌دونه وارد و تایید می‌کنه.
+4. **ساخت خودکار و دسته‌جمعی درسنامه‌ها:** به صورت نامرئی وارد سنجشکده شده، شناسه‌های تمام سوالات ثبت‌شده در درس رو استخراج می‌کنه و با یک کلیک فرآیند هوش مصنوعی ساخت درسنامه (Lesson Plan) رو برای تک‌تک اون‌ها فعال می‌کنه.
 
 ---
 
@@ -46,32 +47,49 @@ bash run_linux_mac.sh
 
 ---
 
-### 📋 ۳ مرحله ساده برای ثبت آزمون در سنجشکده
+### 📋 ۴ مرحله ساده برای کار با سامانه
 
 ```mermaid
 graph LR
-    A["📄 ۱. انتخاب فایل PDF"] --> B["🤖 ۲. استخراج با هوش مصنوعی"]
-    B --> C["📊 ۳. مشاهده، ویرایش و ثبت خودکار در سنجشکده"]
+    A["📄 ۱. انتخاب فایل PDF"] --> B["🤖 ۲. استخراج هوشمند"]
+    B --> C["📋 ۳. مشاهده، ویرایش و ثبت در سنجشکده"]
+    C --> D["📚 ۴. ساخت خودکار درسنامه"]
 ```
 
 1. **مرحله ۱ (تنظیمات اولیه در سایدبار راست):**
    * **کلید API گوگل:** کلید رایگان خودتون رو از [Google AI Studio](https://aistudio.google.com/app/apikey) بگیرید و وارد کنید.
-   * **اطلاعات سنجشکده:** نام کاربری، رمز عبور، لینک صفحه ثبت سوال درس (مثلاً `https://sanjeshkade.ir/User/Lessons/CreateQuestion/155`) و عنوان آزمون/تگ رو بنویسید.
+   * **اطلاعات سنجشکده:** نام کاربری، رمز عبور، لینک صفحه ثبت سوال درس (مثلاً `https://sanjeshkade.ir/User/Lessons/CreateQuestion/300`) و عنوان آزمون/تگ رو بنویسید.
    *(این اطلاعات روی سیستم خودتون ذخیره میشن و دفعه‌های بعد نیاز به تایپ مجدد نیست).*
 
-2. **مرحله ۲ (استخراج هوشمند):**
+2. **مرحله ۲ (استخراج هوشمند سوالات و کلید):**
    * فایل PDF دفترچه رو انتخاب کنید.
-   * شماره صفحات سوالات و صفحه کلید رو مشخص کنید و دکمه **شروع استخراج** رو بزنید.
+   * مدل مورد نظر هوش مصنوعی (مثل **Gemini 2.5 Flash** یا **Gemini 3.6 Flash**) رو انتخاب کنید.
+   * وضعیت پاسخنامه رو مشخص کرده و دکمه **شروع استخراج** رو بزنید.
 
-3. **مرحله ۳ (ثبت نهایی در سنجشکده):**
-   * در تب دوم می‌تونید سوالات رو در جدول ببینید و در صورت تمایل ویرایش کنید یا خروجی JSON دانلود کنید.
-   * در تب سوم دکمه **شروع فرآیند بارگذاری خودکار** رو بزنید تا ربات همه سوالات رو در سایت ثبت و ذخیره کنه!
+3. **مرحله ۳ (مشاهده، ویرایش و ثبت نهایی در سنجشکده):**
+   * در تب دوم سوالات رو در جدول هوشمند بازبینی کنید، اصلاحات دلخواه رو اعمال کنید یا خروجی JSON بگیرید.
+   * در تب سوم دکمه **شروع فرآیند بارگذاری خودکار** رو بزنید تا ربات همه سوالات رو در سایت ثبت کنه.
+
+4. **مرحله ۴ (تولید خودکار درسنامه‌ها):**
+   * در تب چهارم، آدرس یا شناسه درس (مثلاً `300`) رو وارد کرده و دکمه **شروع ورود و ساخت خودکار درسنامه‌ها** رو بزنید.
+   * برنامه بدون دخالت دست، کوکی نشست رو برداشته و فرآیند تولید درسنامه تمام سوالات درس رو با گزارش لحظه‌ای استارت می‌زنه!
+
+---
+
+### 💻 استفاده از اسکریپت ترمینال درسنامه (`sanjesh.py`)
+برای کاربرانی که ترجیح می‌دن مستقیم از خط فرمان برای درسنامه‌ها استفاده کنن:
+
+```bash
+# لاگین خودکار نامرئی و تولید درسنامه برای درس شماره ۳۰۰
+python sanjesh.py --referer 300 --username "you@gmail.com" --password "your_pass"
+
+# یا اجرا با کوکی اختصاصی مرورگر
+python sanjesh.py --referer "https://sanjeshkade.ir/User/Lessons/Questions/300" --cookie ".AspNetCore.Cookies=..."
+```
 
 ---
 
 ### 📦 راهنمای نصب دستی (برای برنامه‌نویسان)
-
-اگر تمایل دارید به صورت دستی محیط رو راه‌اندازی کنید:
 
 ```bash
 # ۱. ساخت و فعال‌سازی محیط مجازی
@@ -96,20 +114,7 @@ streamlit run app.py
 * **Automated Exam Extraction:** Feed any multiple-choice quiz PDF (university entrance, professional certifications, etc.) to the app. Google Gemini Vision AI parses all questions, 4 options, long reading passages, and formulas.
 * **Smart Answer Key Matching:** Automatically reads the official answer key table and sets the correct option for every single question.
 * **One-Click Sanjeshkade Upload:** Automatically logs into [sanjeshkade.ir](https://sanjeshkade.ir) via Selenium and registers all questions with tags and session years.
-
----
-
-### 🚀 Quick Launch (Beginner Friendly)
-
-#### 🪟 Windows
-Simply double-click:
-📁 **`run_windows.bat`**
-
-#### 🐧 🍏 Linux / macOS
-Open a terminal in the folder and run:
-```bash
-bash run_linux_mac.sh
-```
+* **Batch Lesson Plan Generation:** Discovers all questions inside any lesson on Sanjeshkade and triggers the AI lesson plan generation (`GenerateLessonPlanBatch`) in batch with live progress tracking.
 
 ---
 
@@ -117,9 +122,10 @@ bash run_linux_mac.sh
 
 | File / Directory | Description |
 | :--- | :--- |
-| **`app.py`** | Modern interactive Web Dashboard (Streamlit). |
-| **`core_extractor.py`** | AI Vision engine for question & answer key extraction. |
-| **`core_automator.py`** | Automation engine for logging in and uploading to Sanjeshkade. |
+| **`app.py`** | Modern interactive Web Dashboard with 4 tabs (Streamlit). |
+| **`core_extractor.py`** | AI Vision engine with zero-thinking-latency optimization for Gemini 2.5 / 3.x. |
+| **`core_automator.py`** | Selenium automation engine for multi-browser self-healing login and question registration. |
+| **`sanjesh.py`** | Headless cookie extractor & batch lesson plan generator (CLI + API). |
 | **`run_windows.bat`** | One-click launcher for Windows. |
 | **`run_linux_mac.sh`** | One-click launcher for Linux and macOS. |
 | **`requirements.txt`** | List of required Python packages. |
@@ -128,3 +134,4 @@ bash run_linux_mac.sh
 
 ### ⭐ حمایت از پروژه
 اگر این ابزار ساعت‌ها کار تکراری رو براتون حذف کرد، با زدن دکمه **⭐️ Star** در بالای صفحه گیت‌هاب خستگی رو از تنمون در کنید! 😉🚀
+
