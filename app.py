@@ -871,6 +871,20 @@ with tab4:
             placeholder=".AspNetCore.Antiforgery.xxx=...; .AspNetCore.Cookies=..."
         )
 
+    col_lp_opt1, col_lp_opt2 = st.columns([1.5, 1], gap="medium")
+    with col_lp_opt1:
+        skip_existing = st.checkbox(
+            "⚡ فیلتر هوشمند: فقط سوالات بدون درسنامه (رد کردن سوالات دارای درسنامه)",
+            value=True,
+            help="در صورت فعال بودن، سوالاتی که قبلاً در سنجشکده درسنامه دارند مجدداً پردازش نمی‌شوند و فقط سوالات فاقد درسنامه ارسال می‌شوند."
+        )
+    with col_lp_opt2:
+        auto_retry = st.checkbox(
+            "🔁 تلاش مجدد خودکار در صورت تایم‌اوت شبکه",
+            value=True,
+            help="در صورت بروز خطای تایم‌اوت موقت روی یک سوال، سیستم یک بار دیگر به صورت خودکار تلاش می‌کند."
+        )
+
     btn_start_lesson = st.button("🚀 شروع ورود و ساخت خودکار درسنامه‌ها", type="primary", width="stretch")
 
     if btn_start_lesson:
@@ -901,22 +915,43 @@ with tab4:
                         username=sanjeshkade_user,
                         password=sanjeshkade_pass,
                         delay=lesson_delay_input,
+                        only_missing=skip_existing,
+                        timeout=60,
+                        max_retries=2 if auto_retry else 1,
                         progress_callback=handle_lp_progress,
                         log_callback=handle_lp_log
                     )
 
                     lp_progress.progress(100)
-                    lp_status.success(f"🎉 عملیات ساخت درسنامه برای {summary['success_count']} سوال با موفقیت ارسال شد!")
+                    already_comp = summary.get("already_completed", 0)
+                    targeted_count = summary.get("targeted", summary["total"])
+
+                    if targeted_count == 0 and already_comp > 0:
+                        lp_status.success(f"🎉 تمامی {summary['total']} سوال این درس از قبل دارای درسنامه هستند و نیازی به تولید مجدد نبود!")
+                    else:
+                        skip_info = f" ({already_comp} سوال از قبل دارای درسنامه بودند و رد شدند)" if already_comp > 0 else ""
+                        lp_status.success(f"🎉 عملیات ساخت درسنامه برای {summary['success_count']} سوال با موفقیت انجام شد!{skip_info}")
                     st.balloons()
 
                     with lp_metrics.container():
-                        m1, m2, m3 = st.columns(3)
-                        with m1:
-                            st.metric("📊 کل سوالات درس", f"{summary['total']} سوال")
-                        with m2:
-                            st.metric("✅ درخواست‌های موفق", f"{summary['success_count']} سوال")
-                        with m3:
-                            st.metric("❌ خطاها", f"{summary['failed_count']} سوال")
+                        if already_comp > 0:
+                            m1, m2, m3, m4 = st.columns(4)
+                            with m1:
+                                st.metric("📊 کل سوالات درس", f"{summary['total']} سوال")
+                            with m2:
+                                st.metric("⏩ درسنامه قبلی (رد شده)", f"{already_comp} سوال")
+                            with m3:
+                                st.metric("✅ درخواست‌های موفق", f"{summary['success_count']} سوال")
+                            with m4:
+                                st.metric("❌ خطاها", f"{summary['failed_count']} سوال")
+                        else:
+                            m1, m2, m3 = st.columns(3)
+                            with m1:
+                                st.metric("📊 کل سوالات درس", f"{summary['total']} سوال")
+                            with m2:
+                                st.metric("✅ درخواست‌های موفق", f"{summary['success_count']} سوال")
+                            with m3:
+                                st.metric("❌ خطاها", f"{summary['failed_count']} سوال")
 
                 except Exception as ex:
                     st.error(f"❌ خطا در فرآیند تولید درسنامه: {ex}")

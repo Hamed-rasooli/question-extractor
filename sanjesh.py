@@ -95,48 +95,104 @@ def fetch_questions_page(session, url, headers):
     return resp.text
 
 
-def extract_question_ids(html_text):
+def extract_questions_data(html_text):
     """
-    استخراج شناسه‌های یکتای سوالات از صفحه سوالات سنجشکده
-    استفاده از BeautifulSoup به همراه Regex به عنوان پشتیبان بدون خطا
+    استخراج شناسه‌های یکتا و وضعیت درسنامه هر سوال از صفحه سوالات سنجشکده
+    خروجی: لیستی از دیکشنری‌ها با فیلدهای question_id و has_lesson_plan
     """
-    ids = []
+    items = []
+    seen = set()
     try:
         from bs4 import BeautifulSoup
         soup = BeautifulSoup(html_text, "html.parser")
         for box in soup.select("div.QuestionBox[question-id]"):
             qid = box.get("question-id")
-            if qid:
-                ids.append(str(qid).strip())
+            if not qid:
+                continue
+            qid = str(qid).strip()
+            if qid in seen:
+                continue
+            seen.add(qid)
+
+            # بررسی المان وضعیت درسنامه در صفحه سنجشکده
+            status_el = box.select_one(".HasLessonPlanStatus")
+            preview_btn = box.select_one(".PreviewLessonPlanFromGridBtn")
+
+            has_lp = False
+            if status_el:
+                classes = status_el.get("class", [])
+                text = status_el.get_text(strip=True)
+                # در سنجشکده اگر درسنامه داشته باشد: class="text-success" و متن "درسنامه: دارد" است
+                if "text-success" in classes or ("دارد" in text and "ندارد" not in text):
+                    has_lp = True
+
+            # دکمه پیش‌نمایش در صورت نداشتن درسنامه کلاس disabled و aria-disabled="true" دارد
+            if not has_lp and preview_btn:
+                btn_classes = preview_btn.get("class", [])
+                if "disabled" not in btn_classes and preview_btn.get("aria-disabled") != "true":
+                    has_lp = True
+
+            items.append({
+                "question_id": qid,
+                "has_lesson_plan": has_lp
+            })
     except Exception:
         pass
 
-    # در صورت عدم استخراج با bs4، استخراج از طریق الگوهای Regex
-    if not ids:
-        regex_ids = re.findall(r'question-id=["\']?(\d+)["\']?', html_text)
-        ids.extend(regex_ids)
+    # پشتیبان Regex در صورت خطای احتمالی در تجزیه HTML
+    if not items:
+        regex_ids = re.findall(r'question-id=["\']?([a-f0-9\-]+|\d+)["\']?', html_text)
+        for qid in regex_ids:
+            if qid not in seen:
+                seen.add(qid)
+                items.append({
+                    "question_id": qid,
+                    "has_lesson_plan": False
+                })
 
-    seen = set()
-    unique_ids = []
-    for qid in ids:
-        if qid not in seen:
-            seen.add(qid)
-            unique_ids.append(qid)
-            
-    return unique_ids
+    return items
 
 
-def generate_lesson_plan(session, endpoint_url, headers, question_id):
-    """ارسال درخواست ساخت درسنامه به اندپوینت سنجشکده برای یک شناسه سوال"""
+def extract_question_ids(html_text):
+    """
+    استخراج شناسه‌های یکتای سوالات از صفحه سوالات سنجشکده (جهت سازگاری با سایر ماژول‌ها)
+    """
+    return [q["question_id"] for q in extract_questions_data(html_text)]
+
+
+def generate_lesson_plan(session, endpoint_url, headers, question_id, timeout=60, max_retries=2, retry_delay=2.0):
+    """
+    ارسال درخواست ساخت درسنامه به اندپوینت سنجشکده برای یک شناسه سوال
+    همراه با مکانیزم تلاش مجدد خودکار (Auto-Retry) برای خطاهای تایم‌اوت و نوسانات شبکه
+    """
     payload = json.dumps([str(question_id)])
-    try:
-        resp = session.post(endpoint_url, data=payload, headers=headers, timeout=35)
-    except requests.RequestException as e:
-        return False, f"خطای شبکه: {e}"
+    last_error = ""
 
-    if resp.status_code == 200:
-        return True, resp.text[:200]
-    return False, f"HTTP {resp.status_code}: {resp.text[:200]}"
+    for attempt in range(1, max_retries + 1):
+        try:
+            resp = session.post(endpoint_url, data=payload, headers=headers, timeout=timeout)
+            if resp.status_code == 200:
+                return True, resp.text[:200]
+
+            # خطاهای گذرای سرور سنجشکده (502/503/504)
+            if resp.status_code in (502, 503, 504) and attempt < max_retries:
+                time.sleep(retry_delay)
+                continue
+
+            return False, f"HTTP {resp.status_code}: {resp.text[:200]}"
+
+        except requests.Timeout as e:
+            last_error = f"تایم‌اوت شبکه ({timeout} ثانیه): {e}"
+            if attempt < max_retries:
+                time.sleep(retry_delay)
+                continue
+        except requests.RequestException as e:
+            last_error = f"خطای شبکه: {e}"
+            if attempt < max_retries:
+                time.sleep(retry_delay)
+                continue
+
+    return False, last_error
 
 
 def run_batch_lesson_plan_generation(
@@ -145,14 +201,18 @@ def run_batch_lesson_plan_generation(
     username=None,
     password=None,
     delay=1.0,
+    only_missing=True,
+    timeout=60,
+    max_retries=2,
     progress_callback=None,
     log_callback=None
 ):
     """
     فرآیند جامع و خودکار تولید درسنامه:
     ۱. لاگین خودکار نامرئی و استخراج کوکی (اگر کوکی داده نشده باشد)
-    ۲. پیمایش صفحه سوالات درس و استخراج شناسه تمام سوالات
-    ۳. فراخوانی دسته‌جمعی اندپوینت ساخت درسنامه با تاخیر کنترل‌شده و گزارش لحظه‌ای
+    ۲. پیمایش صفحه سوالات درس و استخراج شناسه تمام سوالات به همراه وضعیت درسنامه
+    ۳. فیلتر هوشمند سوالاتی که از قبل درسنامه دارند (جهت جلوگیری از دوباره‌کاری و خطای سرور)
+    ۴. فراخوانی دسته‌جمعی اندپوینت ساخت درسنامه با تلاش مجدد هوشمند و گزارش لحظه‌ای
     """
     def log(msg):
         if log_callback:
@@ -180,26 +240,60 @@ def run_batch_lesson_plan_generation(
     except Exception as e:
         raise RuntimeError(f"خطا در برقراری ارتباط با صفحه سوالات: {e}")
 
-    question_ids = extract_question_ids(html_text)
-    total_q = len(question_ids)
+    questions_data = extract_questions_data(html_text)
+    total_q = len(questions_data)
     if total_q == 0:
         raise RuntimeError("هیچ سوالی در این صفحه یافت نشد. لطفاً از درستی لینک یا شناسه درس اطمینان حاصل فرمایید.")
 
-    log(f"🎯 تعداد {total_q} سوال در این درس یافت شد. شروع فرآیند تولید درسنامه...")
+    already_done = [q for q in questions_data if q["has_lesson_plan"]]
+    missing_lp = [q for q in questions_data if not q["has_lesson_plan"]]
+
+    if only_missing:
+        target_questions = missing_lp
+    else:
+        target_questions = questions_data
+
+    target_total = len(target_questions)
+
+    log(f"📊 وضعیت سوالات درس: مجموعاً {total_q} سوال یافت شد.")
+    log(f"✅ سوالات دارای درسنامه قبلی: {len(already_done)} سوال")
+    log(f"⚡ سوالات نیازمند تولید درسنامه: {len(missing_lp)} سوال")
+
+    if only_missing and target_total == 0:
+        log("🎉 تمامی سوالات این درس از قبل دارای درسنامه هستند! نیازی به ثبت درخواست مجدد نیست.")
+        return {
+            "total": total_q,
+            "already_completed": len(already_done),
+            "targeted": 0,
+            "success_count": 0,
+            "failed_count": 0,
+            "results": []
+        }
+
+    log(f"🎯 شروع فرآیند تولید درسنامه برای {target_total} سوال...")
     ajax_headers = build_headers(cookie_str, questions_url, origin, ajax=True)
 
     results = []
     ok_count = 0
     fail_count = 0
 
-    for idx, qid in enumerate(question_ids, start=1):
-        success, msg = generate_lesson_plan(session, endpoint_url, ajax_headers, qid)
+    for idx, item in enumerate(target_questions, start=1):
+        qid = item["question_id"]
+        success, msg = generate_lesson_plan(
+            session=session,
+            endpoint_url=endpoint_url,
+            headers=ajax_headers,
+            question_id=qid,
+            timeout=timeout,
+            max_retries=max_retries
+        )
+
         if success:
             ok_count += 1
-            log(f"[{idx}/{total_q}] سوال #{qid}: ✅ درخواست درسنامه با موفقیت ثبت شد.")
+            log(f"[{idx}/{target_total}] سوال #{qid}: ✅ درخواست درسنامه با موفقیت ثبت شد.")
         else:
             fail_count += 1
-            log(f"[{idx}/{total_q}] سوال #{qid}: ❌ خطا: {msg}")
+            log(f"[{idx}/{target_total}] سوال #{qid}: ❌ خطا: {msg}")
 
         results.append({
             "index": idx,
@@ -209,14 +303,16 @@ def run_batch_lesson_plan_generation(
         })
 
         if progress_callback:
-            progress_callback(idx, total_q, qid, success, msg)
+            progress_callback(idx, target_total, qid, success, msg)
 
-        if idx < total_q and delay > 0:
+        if idx < target_total and delay > 0:
             time.sleep(delay)
 
-    log(f"🎉 فرآیند تکمیل شد! {ok_count} موفق، {fail_count} خطا از مجموع {total_q} سوال.")
+    log(f"🎉 فرآیند تکمیل شد! {ok_count} موفق، {fail_count} خطا از مجموع {target_total} سوال نیازمند پردازش.")
     return {
         "total": total_q,
+        "already_completed": len(already_done),
+        "targeted": target_total,
         "success_count": ok_count,
         "failed_count": fail_count,
         "results": results
@@ -232,6 +328,9 @@ def main():
     parser.add_argument("--username", help="نام کاربری سنجشکده")
     parser.add_argument("--password", help="رمز عبور سنجشکده")
     parser.add_argument("--delay", type=float, default=1.0, help="وقفه بین درخواست‌ها به ثانیه (پیش‌فرض 1.0)")
+    parser.add_argument("--force", action="store_true", help="تولید مجدد حتی برای سوالاتی که قبلاً درسنامه دارند")
+    parser.add_argument("--timeout", type=int, default=60, help="حداکثر زمان انتظار برای پاسخ هر سوال به ثانیه (پیش‌فرض 60)")
+    parser.add_argument("--max-retries", type=int, default=2, help="تعداد دفعات تلاش مجدد در صورت خطای شبکه (پیش‌فرض 2)")
     args = parser.parse_args()
 
     try:
@@ -240,9 +339,12 @@ def main():
             cookie_str=args.cookie,
             username=args.username,
             password=args.password,
-            delay=args.delay
+            delay=args.delay,
+            only_missing=not args.force,
+            timeout=args.timeout,
+            max_retries=args.max_retries
         )
-        print(f"\nپایان عملیات: {res['success_count']} موفق، {res['failed_count']} خطا.")
+        print(f"\nپایان عملیات: {res['success_count']} موفق، {res['failed_count']} خطا (از {res['targeted']} سوال پردازش شده).")
     except Exception as e:
         print(f"\n❌ خطا: {e}")
         sys.exit(1)
@@ -250,4 +352,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
