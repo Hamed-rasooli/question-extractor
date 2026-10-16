@@ -330,10 +330,40 @@ with st.sidebar:
         saved_config["api_key"] = api_key_input
         save_local_config(saved_config)
         
-    use_proxy = st.checkbox("فعال‌سازی پروکسی (v2ray / Socks5)", value=saved_config.get("use_proxy", False))
+    # انتخاب شیوه اتصال (دیفالت: سرور واسط آلمان بدون فیلترشکن)
+    saved_mode = saved_config.get("connection_mode", "relay")
+    mode_options = [
+        "🌐 سرور واسط آلمان (پیشنهادی - بدون نیاز به فیلترشکن)",
+        "⚡ اتصال مستقیم به گوگل (نیازمند VPN فعال)",
+        "🛡️ پروکسی محلی شخصی (v2ray / Socks5)"
+    ]
+    mode_mapping = {"relay": 0, "direct": 1, "custom_proxy": 2}
+    reverse_mode = {0: "relay", 1: "direct", 2: "custom_proxy"}
+
+    selected_index = mode_mapping.get(saved_mode, 0)
+    selected_mode_label = st.radio(
+        "روش اتصال به هوش مصنوعی:",
+        options=mode_options,
+        index=selected_index,
+        help="در حالت سرور واسط آلمان نیازی به روشن بودن هیچ‌گونه فیلترشکن یا پروکسی ندارید."
+    )
+    connection_mode = reverse_mode[mode_options.index(selected_mode_label)]
+
+    relay_url = saved_config.get("relay_url", "http://127.0.0.1:8000/api/v1/proxy/gemini")
     proxy_url = saved_config.get("proxy_url", "http://127.0.0.1:10809")
-    if use_proxy:
-        proxy_url = st.text_input("آدرس پروکسی:", value=proxy_url, help="پورت http محلی کلاینت فیلترشکن")
+
+    if connection_mode == "relay":
+        st.success("✅ **بدون نیاز به فیلترشکن:** درخواست‌های استخراج از طریق سرور آلمان عبور کرده و فیلترینگ دور زده می‌شود.")
+        with st.expander("⚙️ تنظیمات آدرس سرور واسط", expanded=False):
+            relay_url = st.text_input(
+                "آدرس سرور واسط (Relay Gateway):",
+                value=relay_url,
+                help="آدرس سرویس ریورس‌پروکسی پروژه AiBiazmoon"
+            )
+    elif connection_mode == "direct":
+        st.warning("⚠️ **اتصال مستقیم:** فیلترشکن یا VPN سیستم شما برای ارتباط با سرورهای گوگل حتماً باید روشن باشد.")
+    elif connection_mode == "custom_proxy":
+        proxy_url = st.text_input("آدرس پروکسی محلی:", value=proxy_url, help="پورت http محلی کلاینت فیلترشکن مانند 10809")
         st.caption("💡 فقط درخواست‌های Gemini از این پروکسی رد می‌شوند و سایت سنجشکده با IP مستقیم ایران باز خواهد شد.")
         
     st.markdown("---")
@@ -353,7 +383,8 @@ with st.sidebar:
 
     current_sidebar_config = {
         "api_key": st.session_state.get("api_key", ""),
-        "use_proxy": use_proxy,
+        "connection_mode": connection_mode,
+        "relay_url": relay_url,
         "proxy_url": proxy_url,
         "sanjeshkade_user": sanjeshkade_user,
         "sanjeshkade_pass": sanjeshkade_pass,
@@ -527,7 +558,7 @@ with tab1:
                         st.metric(label="⚡ وضعیت اتصال", value="استریم زنده 🟢")
 
             try:
-                configure_gemini(st.session_state["api_key"], proxy=proxy_url if use_proxy else None)
+                configure_gemini(st.session_state["api_key"], connection_mode=connection_mode, relay_url=relay_url, proxy=proxy_url)
                 
                 update_progress(5, "در حال رندر صفحات دفترچه سوالات...")
                 question_images = convert_file_to_images(uploaded_pdf, dpi=200)

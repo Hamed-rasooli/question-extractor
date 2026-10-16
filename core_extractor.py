@@ -269,8 +269,18 @@ def convert_file_to_images(file_input, dpi=200):
 convert_pdf_to_images = convert_file_to_images
 
 
-def configure_gemini(api_key: str, proxy: str = None):
-    """تنظیم کلید و پروکسی برای اتصال به Google Gemini بدون ایجاد تداخل متغیرها"""
+DEFAULT_RELAY_URL = "http://127.0.0.1:8000/api/v1/proxy/gemini"
+CURRENT_CONNECTION_MODE = "relay"
+CURRENT_RELAY_URL = DEFAULT_RELAY_URL
+
+
+def configure_gemini(api_key: str, connection_mode: str = "relay", relay_url: str = None, proxy: str = None):
+    """تنظیم کلید و نحوه اتصال به Google Gemini:
+    - connection_mode="relay": عبور شفاف از سرور واسط آلمان بدون نیاز به فیلترشکن
+    - connection_mode="direct": اتصال مستقیم (نیازمند فیلترشکن فعال سیستم)
+    - connection_mode="custom_proxy": استفاده از پروکسی محلی (v2ray/socks5)
+    """
+    global CURRENT_CONNECTION_MODE, CURRENT_RELAY_URL
     if not api_key or not str(api_key).strip():
         raise ValueError("کلید API جمینای وارد نشده است. لطفاً کلید معتبر را در سایدبار وارد فرمایید.")
     
@@ -279,8 +289,11 @@ def configure_gemini(api_key: str, proxy: str = None):
     if "GOOGLE_API_KEY" in os.environ:
         del os.environ["GOOGLE_API_KEY"]
 
-    if proxy and proxy.strip():
-        proxy_clean = proxy.strip()
+    CURRENT_CONNECTION_MODE = connection_mode or "relay"
+    CURRENT_RELAY_URL = str(relay_url).strip() if relay_url and str(relay_url).strip() else DEFAULT_RELAY_URL
+
+    if CURRENT_CONNECTION_MODE == "custom_proxy" and proxy and str(proxy).strip():
+        proxy_clean = str(proxy).strip()
         os.environ["HTTP_PROXY"] = proxy_clean
         os.environ["HTTPS_PROXY"] = proxy_clean
         os.environ["http_proxy"] = proxy_clean
@@ -289,9 +302,29 @@ def configure_gemini(api_key: str, proxy: str = None):
         for k in ["HTTP_PROXY", "HTTPS_PROXY", "http_proxy", "https_proxy"]:
             if k in os.environ:
                 del os.environ[k]
+        os.environ["NO_PROXY"] = "localhost,127.0.0.1"
+        os.environ["no_proxy"] = "localhost,127.0.0.1"
                 
     if not USE_NEW_GENAI_SDK:
-        legacy_genai.configure(api_key=clean_key)
+        if CURRENT_CONNECTION_MODE == "relay":
+            legacy_genai.configure(api_key=clean_key, client_options={"api_endpoint": CURRENT_RELAY_URL})
+        else:
+            legacy_genai.configure(api_key=clean_key)
+
+
+def get_gemini_client(active_key: str):
+    """ایجاد نمونه کلاینت Google GenAI متناسب با حالت اتصال انتخابی (سرور واسط یا مستقیم)"""
+    clean_key = str(active_key).strip()
+    if CURRENT_CONNECTION_MODE == "relay" and CURRENT_RELAY_URL:
+        return genai.Client(
+            api_key=clean_key,
+            http_options=types.HttpOptions(
+                base_url=CURRENT_RELAY_URL,
+                api_version="v1beta"
+            )
+        )
+    else:
+        return genai.Client(api_key=clean_key)
 
 
 def get_model_content_config(model_name: str, response_mime_type: str = "application/json"):
@@ -423,7 +456,7 @@ def extract_answer_key_dict(key_images, active_key, model_name="gemini-2.5-flash
         else:
             parts.append({"mime_type": "image/jpeg", "data": buf.getvalue()})
 
-    client = genai.Client(api_key=active_key) if USE_NEW_GENAI_SDK else None
+    client = get_gemini_client(active_key) if USE_NEW_GENAI_SDK else None
     raw_key_text = generate_content_with_resilience(
         client=client,
         primary_model=model_name.strip(),
@@ -520,7 +553,7 @@ def extract_questions_from_images(question_images, answer_key_images=None, api_k
     target_model = model_name.strip()
 
     if USE_NEW_GENAI_SDK:
-        client = genai.Client(api_key=active_key)
+        client = get_gemini_client(active_key)
         parts = [prompt]
         for img in actual_q_images:
             buf = io.BytesIO()
