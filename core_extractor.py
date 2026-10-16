@@ -322,11 +322,17 @@ def get_gemini_client(active_key: str):
             http_options=types.HttpOptions(
                 base_url=CURRENT_RELAY_URL,
                 api_version="v1beta",
-                headers={"x-relay-key": DEFAULT_RELAY_SECRET}
+                headers={"x-relay-key": DEFAULT_RELAY_SECRET},
+                timeout=600000
             )
         )
     else:
-        return genai.Client(api_key=clean_key)
+        return genai.Client(
+            api_key=clean_key,
+            http_options=types.HttpOptions(
+                timeout=600000
+            )
+        )
 
 
 def get_model_content_config(model_name: str, response_mime_type: str = "application/json"):
@@ -354,11 +360,11 @@ def get_model_content_config(model_name: str, response_mime_type: str = "applica
 
 def generate_content_with_resilience(client, primary_model, parts, response_mime_type="application/json", max_retries=2, progress_callback=None):
     """
-    فراخوانی ضدخطا با مدیریت ترافیک سنگین (503 UNAVAILABLE)، تلاش مجدد خودکار (Backoff)
-    و سوئیچ هوشمند به مدل‌های جایگزین
+    فراخوانی ضدخطا با مدیریت ترافیک سنگین (503 UNAVAILABLE)، اتمام سهمیه (429) و قطعی شبکه
+    با سوئیچ هوشمند به مدل‌های جایگزین و بدون معطلی روی مدل‌های بدون سهمیه.
     """
     candidate_models = [primary_model]
-    for alt in ["gemini-2.5-flash", "gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-flash-lite-latest"]:
+    for alt in ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-flash-lite-latest", "gemini-2.5-flash"]:
         if alt not in candidate_models:
             candidate_models.append(alt)
 
@@ -388,10 +394,16 @@ def generate_content_with_resilience(client, primary_model, parts, response_mime
             except Exception as e:
                 last_error = e
                 err_msg = str(e).lower()
-                if "503" in err_msg or "unavailable" in err_msg or "high demand" in err_msg or "429" in err_msg or "quota" in err_msg or "resource_exhausted" in err_msg:
+                # در صورت پایان سهمیه (429)، فوراً بدون معطلی به مدل بعدی سوئیچ کن
+                if "429" in err_msg or "quota" in err_msg or "resource_exhausted" in err_msg:
+                    if progress_callback and idx + 1 < len(candidate_models):
+                        next_model = candidate_models[idx + 1]
+                        progress_callback(80, f"⚠️ سهمیه مدل {model_name} تمام شده است؛ انتقال فوری به {next_model}...")
+                    break
+                elif "503" in err_msg or "unavailable" in err_msg or "high demand" in err_msg or "disconnected" in err_msg:
                     wait_time = (attempt + 1) * 2
                     if progress_callback:
-                        progress_callback(85, f"⏳ ترافیک موقت روی مدل {model_name}؛ تلاش مجدد هوشمند پس از {wait_time} ثانیه...")
+                        progress_callback(85, f"⏳ ترافیک یا قطعی موقت روی مدل {model_name}؛ تلاش مجدد پس از {wait_time} ثانیه...")
                     time.sleep(wait_time)
                     continue
                 else:
@@ -404,7 +416,77 @@ def generate_content_with_resilience(client, primary_model, parts, response_mime
     raise last_error or RuntimeError("پاسخی از مدل‌های هوش مصنوعی دریافت نشد.")
 
 
-def extract_answer_key_dict(key_images, active_key, model_name="gemini-2.5-flash", progress_callback=None):
+def stream_content_with_resilience(client, primary_model, parts, response_mime_type="application/json", stream_callback=None, progress_callback=None):
+    """
+    استریم زنده سوالات با مکانیزم ضد قطعی چندمدلی (Multi-Model Resilient Streaming).
+    در صورت بروز خطای سهمیه یا قطعی، فوراً استریم را از مدل بعدی ادامه می‌دهد تا کاربر هیچ خطایی نبیند.
+    """
+    candidate_models = [primary_model]
+    for alt in ["gemini-3.5-flash-lite", "gemini-3.6-flash", "gemini-flash-lite-latest", "gemini-2.5-flash"]:
+        if alt not in candidate_models:
+            candidate_models.append(alt)
+
+    last_error = None
+    for idx, model_name in enumerate(candidate_models):
+        cfg = get_model_content_config(model_name, response_mime_type=response_mime_type)
+        for attempt in range(2):
+            raw_text = ""
+            try:
+                if progress_callback:
+                    progress_callback(30, f"⚡ استریم زنده سوالات با مدل {model_name}...")
+                response_stream = client.models.generate_content_stream(
+                    model=model_name,
+                    contents=parts,
+                    config=cfg
+                )
+                for chunk in response_stream:
+                    if chunk.text:
+                        raw_text += chunk.text
+                        if stream_callback:
+                            q_count_est = raw_text.count('"number":')
+                            stream_callback(chunk.text, len(raw_text), q_count_est)
+
+                if raw_text.strip():
+                    return raw_text.strip()
+                else:
+                    raise ValueError("پاسخ استریم خالی دریافت شد.")
+
+            except Exception as e:
+                last_error = e
+                err_msg = str(e).lower()
+                is_quota = "429" in err_msg or "quota" in err_msg or "resource_exhausted" in err_msg
+                is_retryable = "503" in err_msg or "unavailable" in err_msg or "high demand" in err_msg or "disconnected" in err_msg or "remoteprotocolerror" in err_msg
+
+                if is_quota:
+                    if progress_callback and idx + 1 < len(candidate_models):
+                        next_model = candidate_models[idx + 1]
+                        progress_callback(35, f"⚠️ سهمیه مدل {model_name} پایان یافته؛ سوئیچ هوشمند به {next_model}...")
+                    break
+
+                if is_retryable and attempt == 0:
+                    wait_time = 2
+                    if progress_callback:
+                        progress_callback(35, f"⏳ قطعی موقت در مدل {model_name}؛ تلاش مجدد هوشمند پس از {wait_time} ثانیه...")
+                    time.sleep(wait_time)
+                    continue
+                else:
+                    break
+
+        if progress_callback and idx + 1 < len(candidate_models):
+            next_model = candidate_models[idx + 1]
+            progress_callback(40, f"🔄 سوئیچ خودکار به مدل پرسرعت جایگزین ({next_model})...")
+
+    # فال‌بک نهایی: تلاش غیراستریم با رزیلینس
+    return generate_content_with_resilience(
+        client=client,
+        primary_model=candidate_models[0],
+        parts=parts,
+        response_mime_type=response_mime_type,
+        progress_callback=progress_callback
+    )
+
+
+def extract_answer_key_dict(key_images, active_key, model_name="gemini-3.5-flash-lite", progress_callback=None):
     """
     موتور استخراج هوشمند و همه‌منظوره کلید پاسخنامه (کاملاً مستقل از ساختار: تک‌ستونه، چندستونه، جدولی، لیستی، افقی و عمودی)
     """
@@ -471,7 +553,7 @@ def extract_answer_key_dict(key_images, active_key, model_name="gemini-2.5-flash
     return answer_dict
 
 
-def extract_questions_from_images(question_images, answer_key_images=None, api_key=None, model_name="gemini-2.5-flash", total_questions_expected=None, answers_are_bolded=False, answer_key_page=0, progress_callback=None, stream_callback=None):
+def extract_questions_from_images(question_images, answer_key_images=None, api_key=None, model_name="gemini-3.5-flash-lite", total_questions_expected=None, answers_are_bolded=False, answer_key_page=0, progress_callback=None, stream_callback=None):
     """
     استخراج هوشمند و همه‌منظوره با انطباق قطعی کلیدها
     """
@@ -567,31 +649,14 @@ def extract_questions_from_images(question_images, answer_key_images=None, api_k
                 mime_type="image/jpeg"
             ))
 
-        cfg = get_model_content_config(target_model, response_mime_type="application/json")
-        try:
-            response_stream = client.models.generate_content_stream(
-                model=target_model,
-                contents=parts,
-                config=cfg
-            )
-            for chunk in response_stream:
-                if chunk.text:
-                    raw_text += chunk.text
-                    if stream_callback:
-                        q_count_est = raw_text.count('"number":')
-                        stream_callback(chunk.text, len(raw_text), q_count_est)
-            if not raw_text.strip():
-                raise ValueError("پاسخ استریم خالی دریافت شد.")
-        except Exception:
-            if progress_callback:
-                progress_callback(40, f"🟢 در حال فراخوانی پایدار و بدون قطعی با {target_model}...")
-            raw_text = generate_content_with_resilience(
-                client=client,
-                primary_model=target_model,
-                parts=parts,
-                response_mime_type="application/json",
-                progress_callback=progress_callback
-            )
+        raw_text = stream_content_with_resilience(
+            client=client,
+            primary_model=target_model,
+            parts=parts,
+            response_mime_type="application/json",
+            stream_callback=stream_callback,
+            progress_callback=progress_callback
+        )
     else:
         legacy_genai.configure(api_key=active_key)
         image_parts = []
