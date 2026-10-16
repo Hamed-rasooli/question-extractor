@@ -349,7 +349,7 @@ with st.sidebar:
     )
     connection_mode = reverse_mode[mode_options.index(selected_mode_label)]
 
-    relay_url = saved_config.get("relay_url", "http://127.0.0.1:8000/api/v1/proxy/gemini")
+    relay_url = saved_config.get("relay_url", "http://46.249.102.83/api/v1/proxy/gemini")
     proxy_url = saved_config.get("proxy_url", "http://127.0.0.1:10809")
 
     if connection_mode == "relay":

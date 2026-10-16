@@ -269,7 +269,8 @@ def convert_file_to_images(file_input, dpi=200):
 convert_pdf_to_images = convert_file_to_images
 
 
-DEFAULT_RELAY_URL = "http://127.0.0.1:8000/api/v1/proxy/gemini"
+DEFAULT_RELAY_URL = "http://46.249.102.83/api/v1/proxy/gemini"
+DEFAULT_RELAY_SECRET = "super-secret-key-for-dotnet"
 CURRENT_CONNECTION_MODE = "relay"
 CURRENT_RELAY_URL = DEFAULT_RELAY_URL
 
@@ -320,7 +321,8 @@ def get_gemini_client(active_key: str):
             api_key=clean_key,
             http_options=types.HttpOptions(
                 base_url=CURRENT_RELAY_URL,
-                api_version="v1beta"
+                api_version="v1beta",
+                headers={"x-relay-key": DEFAULT_RELAY_SECRET}
             )
         )
     else:
